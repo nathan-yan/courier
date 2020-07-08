@@ -39,6 +39,14 @@ class Messenger:
         self.ME = personal_id
         self.user_dict = user_dict
         self.threads = threadlist
+
+        # this is a sorta crappy priority queue solution that displays the most important/recent threads by ranking them priority-wise
+        # everytime a thread gets a message the maximum priority and add 1 and update that thread's priority so it is displayed first
+        # you can pin a thread by giving it a priority of -1
+        self.thread_priority = []
+        for i in range (len(self.threads)): 
+            self.thread_priority.append([0, i])
+
         self.messages = messages
 
         self.active_thread = 1
@@ -73,6 +81,18 @@ class MessengerClient(Client):
             # the flag is because we don't want to keep sending markAsRead notifications to facebook every keystroke.
 
             if self.messenger.threads[i].uid == thread_id:
+                # percolate this thread to the top
+                # the max_priority is the first element
+                max_priority = self.messenger.thread_priority[0][0]
+                for j in self.messenger.thread_priority:
+                    if j[1] == i:
+                        #pass
+
+                        j[0] = max_priority + 1
+                
+                # resort the priority
+                self.messenger.thread_priority.sort(reverse = True)
+
                 self.messenger.threads[i].read = False
 
                 message_object.read_by = []
