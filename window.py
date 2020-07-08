@@ -111,7 +111,12 @@ class MessengerThreadWindow(Window):
         
         self.addstr(self.mheight - 2, 0, u"└" + u"─" * (self.mwidth - 2) + u"┘")
 
-        for i, (thread, messages) in enumerate(zip(self.M.threads, self.M.messages)):
+        for i, priority in enumerate(self.M.thread_priority):
+            thread_idx = priority[1]
+
+            thread = self.M.threads[thread_idx]
+            messages = self.M.messages[thread_idx]
+
             # draw separators
             print(i * 5, 1, self.mwidth,)
             self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
@@ -188,7 +193,7 @@ class MessengerChatWindow(Window):
                 clickable_counter += 1
 
                 # add the instructions to line
-                line[1].append([start, end, curses.color_pair(2)])
+                line[1].append([start, end + len(" [%s]" % (clickable_counter + 1)), curses.color_pair(2)])
 
         # check for attachments
         if msg.attachments:
@@ -197,10 +202,10 @@ class MessengerChatWindow(Window):
                     # get the url and add it to msg.clickable
                     msg.clickable.append(attachment.large_preview_url)
 
-                    ret.append(["%d [image attachment] - %d x %d" % (clickable_counter + 1, attachment.large_preview_width, attachment.large_preview_height), 
+                    ret.append(["image attachment [%d] - %d x %d" % (clickable_counter + 1, attachment.large_preview_width, attachment.large_preview_height), 
                     
                     
-                    [[len(str(clickable_counter)) + 1, len(str(clickable_counter)) + 1 + len('[image attachment]'), curses.color_pair(2)]]
+                    [[0, len(str(clickable_counter)) + 1 + len('image attachment [%d]' % (clickable_counter + 1)), curses.color_pair(2)]]
                     
                     ])
                     
@@ -690,10 +695,10 @@ class MessengerTextBox(Window):
             # del key
             self.text = self.text[:self.cursor_position] + self.text[self.cursor_position + 1:]
 
-        elif a == 21:   # ctrl-U
+        elif a == 21 or a == curses.KEY_UP:   # ctrl-U
             self.M.getActiveThread().start += 5
         
-        elif a == 4:    # ctrl-D
+        elif a == 4 or a == curses.KEY_DOWN:    # ctrl-D
             if self.M.getActiveThread().start >= 5:
                 self.M.getActiveThread().start -= 5
 
@@ -703,7 +708,7 @@ class MessengerTextBox(Window):
             self.window.clear()
             self.window.refresh()
 
-            msg = Message(text = self.text)
+            msg = Message(text = emoji.emojize(self.text))
 
             send_msg = True
 
