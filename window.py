@@ -126,7 +126,7 @@ class MessengerThreadWindow(Window):
             else:
                 last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": ?", 3)
 
-            name = ellipses(self.window, str(i) + "  " + thread.name, 3)
+            name = ellipses(self.window, str(thread_idx) + "  " + thread.name, 3)
             lines.append([
                 name,
                 [(0, len(name), curses.color_pair(curses.COLOR_BLUE))]
@@ -707,6 +707,9 @@ class MessengerTextBox(Window):
 
             self.window.clear()
             self.window.refresh()
+
+            if self.text == ':q' or self.text == ':Q':
+                return True
 
             msg = Message(text = emoji.emojize(self.text))
 

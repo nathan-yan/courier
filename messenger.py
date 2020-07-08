@@ -45,7 +45,7 @@ class Messenger:
         # you can pin a thread by giving it a priority of -1
         self.thread_priority = []
         for i in range (len(self.threads)): 
-            self.thread_priority.append([0, i])
+            self.thread_priority.append([len(self.threads) - i, i])
 
         self.messages = messages
 
@@ -408,12 +408,13 @@ def main(stdscr):
 
         a = stdscr.getch()
 
-
-        if a == ord("Q"):
+        if a == 3:  # ctrl-c
             break;
                 
-        textbox.processKey(a)
-        
+        do_break = textbox.processKey(a)
+        if do_break:
+            break;
+
         textbox.render()
         textbox.refresh()
         
