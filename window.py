@@ -132,7 +132,7 @@ class MessengerThreadWindow(Window):
                 [(0, len(name), curses.color_pair(curses.COLOR_BLUE))]
             ])
 
-            if self.M.ME not in messages[0].read_by and not self.M.threads[self.M.active_thread].read:
+            if self.M.ME not in messages[0].read_by and not self.M.threads[thread_idx].read:
                 lines.append([
                     last,
                     [[0, len(last), curses.color_pair(5)]]
@@ -774,7 +774,7 @@ class MessengerTextBox(Window):
         elif a != -1:
             # send a read notification
             if not self.M.threads[self.M.active_thread].read:
-                #self.client.markAsRead(self.M.threads[self.M.active_thread].uid)
+                self.client.markAsRead(self.M.threads[self.M.active_thread].uid)
                 self.M.threads[self.M.active_thread].read = True
 
             char = str(chr(a))[0]

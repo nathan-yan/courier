@@ -93,9 +93,8 @@ class MessengerClient(Client):
                 # resort the priority
                 self.messenger.thread_priority.sort(reverse = True)
 
-                self.messenger.threads[i].read = False
-
-                message_object.read_by = []
+                # if you didn't write the message, set read to false
+                self.messenger.threads[i].read = author_id == self.messenger.ME
                 self.messenger.messages[i] = [message_object] + self.messenger.messages[i]
             
                 tid = self.messenger.threads[self.messenger.active_thread].uid
