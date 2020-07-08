@@ -1,0 +1,5 @@
+windows-curses==2.2
+emoji==0.5.4
+aenum==2.2.3
+fbchat==1.9.7
+
