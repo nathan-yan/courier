@@ -663,21 +663,21 @@ class MessengerTextBox(Window):
                 self.text = self.text[:self.cursor_position - 1] + self.text[self.cursor_position:]
 
             self.cursor_position = max(0, self.cursor_position - 1)
-        elif a == curses.KEY_LEFT:
+        elif a == curses.KEY_LEFT or a == curses.KEY_B1:
             
             self.cursor_position = max(0, self.cursor_position - 1)
 
-        elif a == curses.KEY_RIGHT:
+        elif a == curses.KEY_RIGHT or a == curses.KEY_B3:
             
             self.cursor_position = min(len(self.text), self.cursor_position + 1)
 
-        elif a == curses.CTL_LEFT:
+        elif a == curses.CTL_LEFT or a == curses.ALT_B:
             try:
                 self.cursor_position -= self.cursor_position - self.text.rindex(" ", 0, self.cursor_position - 1) - 1
             except ValueError:
                 self.cursor_position = 0
 
-        elif a == curses.CTL_RIGHT:
+        elif a == curses.CTL_RIGHT or a == curses.ALT_F:
             try:
                 self.cursor_position += self.text.index(" ", self.cursor_position) - self.cursor_position + 1
             except ValueError:
@@ -695,15 +695,23 @@ class MessengerTextBox(Window):
             # del key
             self.text = self.text[:self.cursor_position] + self.text[self.cursor_position + 1:]
 
-        elif a == 21 or a == curses.KEY_UP:   # ctrl-U
+        elif a == 9 or a == curses.KEY_UP or a == curses.KEY_A2:   # ctrl-I, KEY_A2 is cuz hyper is weird?
             self.M.getActiveThread().start += 5
         
-        elif a == 4 or a == curses.KEY_DOWN:    # ctrl-D
+        elif a == 11 or a == curses.KEY_DOWN or a == curses.KEY_C2:    # ctrl-K, KEY_C2 is cuz hyper is weird?
             if self.M.getActiveThread().start >= 5:
                 self.M.getActiveThread().start -= 5
 
         elif a == 10:
             # send the text
+
+            # strip leading and trailing whitespace
+            self.text = self.text.strip()
+            if len(self.text) == 0:
+                self.text = ''
+                self.prev_text = ''
+                cursor_position = 0
+                return
 
             self.window.clear()
             self.window.refresh()
