@@ -4,6 +4,8 @@ from curses.textpad import Textbox
 import random
 import locale 
 
+import math
+
 import base64
 import hashlib
 
@@ -126,12 +128,39 @@ def matchBeginning(string, l):
         if string[:len(s)] == s:
             return True
 
+def convertToBase(num, b):
+    max_pow = int(math.log(num, b)) + 1
+    
+    ret = [0 for i in range (max_pow)]
+    for d in range (max_pow - 1, -1, -1):
+        
+        p = b ** d
+        digit = num // (p)
 
+        ret[d] = digit
+
+        num = num % p
+
+    return ret[::-1]
+        
 def produceHash(msg):
     h = hashlib.new('md5')
     h.update(str(msg.timestamp).encode())
-    code = base64.b32encode(h.digest()).decode().lower()
 
+    alpha = 'abcdefghijklmnopqrstuvwxyz'
+    code = convertToBase(int(h.hexdigest(), 16), 26)
+
+    code = ''.join([alpha[i] for i in code])
+    return code
+
+def produceHashThread(thread):
+    h = hashlib.new('md5')
+    h.update(str(thread.uid).encode())
+
+    alpha = 'abcdefghijklmnopqrstuvwxyz'
+    code = convertToBase(int(h.hexdigest(), 16), 26)
+
+    code = ''.join([alpha[i] for i in code])
     return code
 
 def ellipses(window, text, padding = 0):

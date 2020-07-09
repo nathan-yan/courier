@@ -136,10 +136,13 @@ class MessengerThreadWindow(Window):
             else:
                 last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": ?", 9)
 
-            name = ellipses(self.window, str(thread_idx) + "  " + thread.name, 9)
+            pinned_code = self.M.settings['pinnedThreads'].get(thread.uid)
+
+            code = pinned_code if pinned_code else produceHashThread(thread)[:3]
+            name = ellipses(self.window, code + " " + thread.name, 9)
             lines.append([
                 name,
-                [(0, len(name), curses.color_pair(curses.COLOR_BLUE) | (curses.A_REVERSE) * (thread_idx == self.M.active_thread))]
+                [(0, len(code), curses.color_pair(2)), (len(code) + 1, len(name), curses.color_pair(curses.COLOR_BLUE) | (curses.A_REVERSE) * (thread_idx == self.M.active_thread))]
             ])
 
             if self.M.ME not in messages[0].read_by and not self.M.threads[thread_idx].read:
@@ -834,11 +837,32 @@ class MessengerTextBox(Window):
                 if matchBeginning(self.text, [":compact"]):
                     self.M.compact = not self.M.compact
                     send_msg = False
+                
+                elif matchBeginning(self.text, [':pin']):
+                    name = self.text.split(' ')[1]
+
+                    if name not in self.M.settings['pinnedThreads'].values():
+                        self.M.settings['pinnedThreads'][self.M.getActiveThread().uid] = name
+                        self.M.updateSettings()
+
+                    send_msg = False
+                
+                elif matchBeginning(self.text, [':unpin']):
+                    uid = self.M.getActiveThread().uid
+
+                    if uid in self.M.settings['pinnedThreads']: 
+                        del self.M.settings['pinnedThreads'][uid]
+                        self.M.updateSettings()
+                    
+                    send_msg = False
 
                 elif matchBeginning(self.text, [':switch', ':s ']):
-                    thread_idx = int(self.text.split(" ")[1])
+                    thread_code = self.text.split(" ")[1]
 
-                    self.M.active_thread = thread_idx
+                    for i, t in enumerate(self.M.threads):
+                        if self.M.settings['pinnedThreads'].get(t.uid) == thread_code or produceHashThread(t)[:3] == thread_code:
+                            self.M.active_thread = i
+                            break;
 
                     send_msg = False
                 

@@ -38,7 +38,8 @@ import utils
 locale.setlocale(locale.LC_ALL, "");
 
 class Messenger:
-    def __init__(self, personal_id, user_dict, threadlist, messages):
+    def __init__(self, settings, personal_id, user_dict, threadlist, messages):
+        self.settings = settings
         self.ME = personal_id
         self.user_dict = user_dict
         self.threads = threadlist
@@ -65,6 +66,10 @@ class Messenger:
     
     def getActiveMessages(self):
         return self.messages[self.active_thread]
+
+    def updateSettings(self):
+        with open("settings.json", 'w') as f:
+            f.write(json.dumps(self.settings))
 
 class MessengerClient(Client):
     def __init__(self, username, password, max_tries = 2, session_cookies = ""):
@@ -294,6 +299,14 @@ def main(stdscr):
     #    pickle.dump(threads, f)
     #    pickle.dump(threadInfo, f)
     #    pickle.dump(users, f)
+    if not path.exists("settings.json"):
+        with open("settings.json", 'w') as f:
+            f.write(
+                json.dumps({})
+            )
+        
+    with open("settings.json", "r") as f:
+        settings = json.loads(f.read())
 
     login_done = False
     if path.exists("cookies.json"):
@@ -350,11 +363,24 @@ def main(stdscr):
     lines = constants.splash_page + ['', 'login successful!']
     starty, startx, lasty = showPage(stdscr, lines, height_offset = 0)
     stdscr.addstr(starty + 1, startx + 2, "courier", curses.A_REVERSE)
-
     stdscr.refresh()
 
     threads = client.fetchThreadList(limit = 20)
-    messages = [client.fetchThreadMessages(threads[i].uid, limit = 20) for i in range (len(threads))]
+
+    stdscr.clear()
+    lines = constants.splash_page + ['', 'fetching messages...']
+    starty, startx, lasty = showPage(stdscr, lines, height_offset = 0)
+    stdscr.addstr(starty + 1, startx + 2, "courier", curses.A_REVERSE)
+    stdscr.refresh()
+
+    messages = [client.fetchThreadMessages(threads[i].uid, limit = 2) for i in range (len(threads))]
+
+    stdscr.clear()
+    lines = constants.splash_page + ['', 'fetching users...']
+    starty, startx, lasty = showPage(stdscr, lines, height_offset = 0)
+    stdscr.addstr(starty + 1, startx + 2, "courier", curses.A_REVERSE)
+    stdscr.refresh()
+
     users = client.fetchAllUsersFromThreads(threads)
     
     for t, m in zip(threads, messages):
@@ -385,7 +411,7 @@ def main(stdscr):
     #    pickle.dump(users, f)
     
     # create messenger object
-    M = Messenger(personal_id,  user_dict, threads, messages,)
+    M = Messenger(settings, personal_id,  user_dict, threads, messages,)
     
     client.setMessenger(M)
     M.active_thread = 0
