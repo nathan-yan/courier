@@ -16,6 +16,9 @@ from curses.textpad import Textbox
 import random
 import locale 
 import emoji
+import ago
+
+from datetime import datetime
 
 import constants
 
@@ -61,7 +64,7 @@ class Window:
         pass 
 
     def refresh(self):
-        self.window.refresh()
+        self.window.noutrefresh()
     
     def addstr(self, y, x, text, color = None):
         if color == None: 
@@ -129,9 +132,9 @@ class MessengerThreadWindow(Window):
                     self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
 
             if messages[0].text:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": " + messages[0].text.encode('ascii', 'ignore').decode().replace("\n", ''), 9)
+                last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": " + messages[0].text.encode('ascii', 'ignore').decode().replace("\n", ''), 9)
             else:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": ?", 9)
+                last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": ?", 9)
 
             name = ellipses(self.window, str(thread_idx) + "  " + thread.name, 9)
             lines.append([
@@ -166,13 +169,17 @@ class MessengerThreadWindow(Window):
 class MessengerChatWindow(Window):
     def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x):
         super().__init__(stdscr, height, width, begin_y, begin_x)
-        
+        self.peek_modal = curses.newwin(20, 20, 0, 0)
+
         self.client = client
         self.M = messenger_obj
             
         self.current_y = self.mheight
 
         self.MARGIN = 6
+
+        self.rendered_modal = False
+
     # todo: should move these bottom 3 methods to utils
     def processMessageText(self, msg):
         # this should return a list of lines with color instructions
@@ -316,7 +323,7 @@ class MessengerChatWindow(Window):
 
         return max_length
 
-    def add(self, message_object, align = "<", display = None, next_max_length = 0, color = None, show_hash = False):
+    def add(self, message_object, align = "<", display = None, next_max_length = 0, color = None, show_hash = False, peek = False):
         # process text 
         if display == 'join-bottom' or display == 'join-bottom-reply':
             pass
@@ -449,6 +456,55 @@ class MessengerChatWindow(Window):
         elif align == '>' and show_hash:
             self.addstr(self.current_y + 1, start_x + max_length + 3 + 2 , code[:4], curses.color_pair(2))
 
+        # if peeking, render a modal
+        if code[:4] == self.M.peek_hash:
+            timestamp = int(message_object.timestamp) / 1000
+            formatted_time = datetime.fromtimestamp(timestamp).strftime('%d %B, %Y @ %I:%M%p')
+
+            peek_lines = [
+                [
+                 "Peek information for message %s" % code[:4], 
+                 [[len("Peek information for message "), len("Peek information for message %s" % code[:4]), curses.color_pair(2)]]
+                ],
+                [""],
+                ["Sent at", [[0, len('sent at'), curses.color_pair(3)]]],
+                [formatted_time, []],
+                
+            ]
+
+            if message_object.reactions:
+                peek_lines += [
+                    [""],
+                    ["Reacts", [[0, 6, curses.color_pair(3)]]],
+                ]
+
+                for key in message_object.reactions.keys():
+                    react = constants.react_mapping.get(message_object.reactions[key]).upper()
+                    name = self.M.user_dict[key].name
+                    peek_lines.append(
+                        ["%s - %s" % (name, react), [[len("%s -" % name), len("%s - %s" % (name, react)), curses.color_pair(2)]]]
+                    )
+
+            max_peek_length = max([len(l[0]) for l in peek_lines])
+
+            self.peek_modal.resize(len(peek_lines) + 4, max_peek_length + 6)
+            self.peek_modal.clear()
+
+            move_y = self.current_y + 2 - len(peek_lines) - 4 + len(renderable_lines)
+            if (move_y) < 1 or len(renderable_lines) >= len(peek_lines):
+                move_y = self.current_y
+            
+            move_x = start_x + max_length + 3 + 2
+            if align == '>':
+                move_x = start_x - max_peek_length - 6  # bruh we got hella padding
+
+            if move_y >= 1:
+                self.peek_modal.mvwin(move_y, self.begin_x + move_x)
+                render_lines(self.peek_modal, peek_lines, padding = [2, 0, 0, 3])
+                self.peek_modal.box()
+
+                self.rendered_modal = True
+
         return max_length
         
     def render(self):
@@ -511,7 +567,8 @@ class MessengerChatWindow(Window):
 
             # the current message is a grayed out replied_to message 
             # OR there exists a future message, the author was the same, this current message was not replied to, nor was the future message
-            if m.is_replied_to or (future_message and future_message.author == m.author  and not m.replied_to and not future_message.is_replied_to):
+            # AND if the last next message is less than 10 minutes apart
+            if m.is_replied_to or ((future_message and future_message.author == m.author  and not m.replied_to and not future_message.is_replied_to) and (int(future_message.timestamp) - int(m.timestamp))/1000 < 60 * 10):
 
                 display = 'join-bottom'
                 if m.is_replied_to:
@@ -558,6 +615,22 @@ class MessengerChatWindow(Window):
                         [[author_name, [[0, len(author_name), curses.color_pair(curses.COLOR_BLUE)]]]],
                         padding = [self.current_y, 2, 0, self.MARGIN],
                         align = "<"
+                    )
+
+                    self.changeY(-1)
+            
+                if future_message and (int(future_message.timestamp) - int(m.timestamp))/1000 >= 60 * 60:
+                    self.changeY(-2)
+
+                    timestamp = int(future_message.timestamp) / 1000
+
+                    formatted_time = ago.human(timestamp)
+
+                    render_lines(
+                        self.window, 
+                        [[formatted_time, [[0, len(formatted_time), curses.color_pair(4)]]]],
+                        padding = [self.current_y, 0, 0, 0],
+                        align = "^"
                     )
 
                     self.changeY(-1)
@@ -656,7 +729,13 @@ class MessengerChatWindow(Window):
         #print(raw_lines, "raw_lines")
         
         #render_lines(self.window, raw_lines)
+    
+    def refresh(self):
+        self.window.noutrefresh()
 
+        if self.rendered_modal:
+            self.peek_modal.noutrefresh()
+            self.rendered_modal = False 
 
 class MessengerTextBox(Window):
     def __init__(self, client, messenger_obj, stdscr, width, height, begin_y, begin_x):
@@ -790,6 +869,14 @@ class MessengerTextBox(Window):
                                         )
 
                                         send_msg = False
+                                
+                                elif command == 'peek':
+                                    self.M.peek_hash = code
+                                    send_msg = False
+                                
+                                elif command == 'cls':
+                                    self.M.peek_hash = ""
+                                    send_msg = False
                                 
                                 elif command in constants.react_mapping_inv:
                                     react = constants.react_mapping_inv[command]

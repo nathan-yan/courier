@@ -32,6 +32,7 @@ import requests
 from io import BytesIO
 
 from window import *
+from modal import *
 import utils
 
 locale.setlocale(locale.LC_ALL, "");
@@ -57,6 +58,7 @@ class Messenger:
         self.thread_pictures = {}
 
         self.compact = True    # are we rendering in compact mode
+        self.peek_hash = ""
         
     def getActiveThread(self):
         return self.threads[self.active_thread]
@@ -428,6 +430,10 @@ def main(stdscr):
             chat_window.render()
             chat_window.refresh()
 
+        #if c % 10 == 0 or c % 17 == 0:
+            #peek_modal.render()
+            #peek_modal.refresh()
+
         #try:
         
 
@@ -442,6 +448,9 @@ def main(stdscr):
 
         textbox.render()
         textbox.refresh()
+
+
+        curses.doupdate()
 
     #dt.start()
     #lt.start()
