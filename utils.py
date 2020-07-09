@@ -4,9 +4,110 @@ from curses.textpad import Textbox
 import random
 import locale 
 
+from PIL import Image
 
 import base64
 import hashlib
+
+
+def displayImage(window, array, begin_y, begin_x, init_pairs = False, img_idx = 0):
+    # target resolution is 4 x 4 characters so 8 x8 resolution
+    # the pfps are 60 x 60 in resolution
+    # each 
+
+    for y in range (0, 8, 2):
+        for x in range (8):
+            idx = y * 8 + x
+            beneath = (y + 1) * 8 + x
+
+            pixel = array[idx]
+            pixel_beneath = array[beneath]
+
+            # rescale the colors
+            #curses.COLORS = 10000
+            #curses.COLOR_PAIRS = 10000
+            #curses.init_color(100 + idx + img_idx * 64, int(pixel[0] * 1000/256), int(pixel[1] * 1000/256), int(pixel[2] * 1000/256))
+            #curses.init_color(100 + beneath + img_idx * 64, int(pixel_beneath[0] * 1000/256), int(pixel_beneath[1] * 1000/256), int(pixel_beneath[2] * 1000/256))
+            
+            #curses.init_pair(100 + idx + img_idx * 64, 100 + idx + img_idx * 64, 100 + beneath + img_idx * 64)
+
+            #window.addch((y + 1)//2 + begin_y, x + begin_x, "▀", curses.color_pair(100 + idx + img_idx * 64))
+
+
+def displayIdenticon(stdscr, name, begin_y, begin_x):
+    colors = [
+        -1,
+        curses.COLOR_BLUE,
+        curses.COLOR_MAGENTA,
+        curses.COLOR_GREEN
+    ]
+
+    # there are 5 * 5 = 25 color pairs possible
+    # we can just do a shitty hash of the color pairs and reconstruct them when we color in
+
+    # the hash is just the foreground color times 7 + background color
+
+    # we need to create each color pair combination
+    
+    curses.use_default_colors()
+
+    h = hashlib.sha256()
+    h.update(name.encode())
+    digest = h.digest()
+
+    # identicon is a 4 x 4 image
+    hasDrawn = False
+    digitOffset = 0
+    
+    while not hasDrawn:
+        for y in range (0, 4, 2):
+            for x in range (0, 2):
+                digit = y * 4 + x
+
+                # whether it's colored depends on parity
+                colored = digest[digit + digitOffset] % 2
+                colored_beneath = digest[digit + 4 + digitOffset] % 2 
+
+                # what it's color is depends on its byte divided by 2 mod 4
+                color = curses.COLOR_BLACK
+                if colored:
+                    color = colors[(digest[digit] // 2) % (len(colors) - 1) + 1]
+
+                color_beneath = curses.COLOR_BLACK
+                if colored_beneath:
+                    color_beneath = colors[(digest[digit] // 2) % (len(colors) - 1)+ 1]
+
+                h = 100 + color * 7 + color_beneath
+
+                if not color and not colored_beneath:
+                    continue
+                    
+                if not color:
+                    # top color is default
+                    # switch to bottom square
+                    curses.init_pair(h, color_beneath, -1)
+
+                    row = digit // 4
+                    col = digit % 4
+                    stdscr.addstr(y//2 + begin_y, x + begin_x, "▄", curses.color_pair(h))
+                    stdscr.addstr(y//2 + begin_y, (4 - x) + begin_x - 1, "▄", curses.color_pair(h))
+
+                    hasDrawn = True
+                    continue;
+
+                elif not colored_beneath:
+                    colored_beneath = -1
+                    
+                curses.init_pair(h, color, color_beneath)
+
+                row = digit // 4
+                col = digit % 4
+                stdscr.addstr(y//2 + begin_y, x + begin_x, "▀", curses.color_pair(h))
+                stdscr.addstr(y//2 + begin_y, (4 - x) + begin_x - 1, "▀", curses.color_pair(h))
+
+                hasDrawn = True
+
+        digitOffset += 16
 
 def matchBeginning(string, l):
     for s in l:
@@ -121,8 +222,6 @@ def wrapLine(line, max_length):
 
     # once the newlines are added, split by newline
     split = line[0].split("\n")
-
-    print(split, line[1])
     
     wrapped_lines_ret = []
     current_x = 0 
@@ -155,7 +254,6 @@ def wrapLine(line, max_length):
             # we can probably make this more concise with max and min
 
             while end >= instruction[current_instruction][1] - 1 and start <= instruction[current_instruction][0]:
-                print('case1', start, end)
                 wrapped_lines_ret[-1][1].append([instruction[current_instruction][0] - start, instruction[current_instruction][1] - start, instruction[current_instruction][2]])
                 current_instruction += 1
 
@@ -167,18 +265,14 @@ def wrapLine(line, max_length):
             if done: continue
 
             if end >= instruction[current_instruction][1] - 1 and start >= instruction[current_instruction][0] and start <= instruction[current_instruction][1] - 1:
-                
-                print('case2', start, end)
                 wrapped_lines_ret[-1][1].append([0, instruction[current_instruction][1] - start, instruction[current_instruction][2]])
                 current_instruction += 1 
 
             elif end < instruction[current_instruction][1] and end > instruction[current_instruction][0] and start <= instruction[current_instruction][0]:
-                print('case3', start, end)
 
                 wrapped_lines_ret[-1][1].append([instruction[current_instruction][0] - start, end - start, instruction[current_instruction][2]])
 
             elif end < instruction[current_instruction][1] and start >= instruction[current_instruction][0]:
-                print('case4', start, end)
 
                 wrapped_lines_ret[-1][1].append([0, end - start, instruction[current_instruction][2]])
             
@@ -189,6 +283,7 @@ def wrapLine(line, max_length):
         
     return wrapped_lines_ret
 
-print(wrapLine(
-    ["hello world i am trying to wrap this line this is a very long, line, yes, current_instruction", [(0, 20, 1), (21, 25, 2), (30, 34, 3)]]
-, 21))
+if __name__ == "__main__":
+    print(wrapLine(
+        ["hello world i am trying to wrap this line this is a very long, line, yes, current_instruction", [(0, 20, 1), (21, 25, 2), (30, 34, 3)]]
+    , 21))

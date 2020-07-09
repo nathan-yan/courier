@@ -24,6 +24,7 @@ from fbchat.models import *
 
 from utils import *
 
+from PIL import Image
 
 color_search = re.compile("\${[0-9]}")
 url_search = re.compile('(?:(?:https?|ftp):\/\/)?[\w/\-?=%#&.]+\.[\w/\-?=%#&.]+')
@@ -92,6 +93,8 @@ class MessengerThreadWindow(Window):
         self.client = client
         self.M = messenger_obj
 
+        self.init_pairs = True
+
     def render(self):
         self.window.clear()
         
@@ -118,18 +121,17 @@ class MessengerThreadWindow(Window):
             messages = self.M.messages[thread_idx]
 
             # draw separators
-            print(i * 5, 1, self.mwidth,)
             self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
 
             if messages[0].text:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": " + messages[0].text.encode('ascii', 'ignore').decode(), 3)
+                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": " + messages[0].text.encode('ascii', 'ignore').decode(), 9)
             else:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": ?", 3)
+                last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": ?", 9)
 
-            name = ellipses(self.window, str(thread_idx) + "  " + thread.name, 3)
+            name = ellipses(self.window, str(thread_idx) + "  " + thread.name, 9)
             lines.append([
                 name,
-                [(0, len(name), curses.color_pair(curses.COLOR_BLUE))]
+                [(0, len(name), curses.color_pair(curses.COLOR_BLUE) | (curses.A_REVERSE) * (thread_idx == self.M.active_thread))]
             ])
 
             if self.M.ME not in messages[0].read_by and not self.M.threads[thread_idx].read:
@@ -140,14 +142,16 @@ class MessengerThreadWindow(Window):
             else:
                 lines.append([
                     last,
-                    
+                    []
                 ])
 
             lines.append([''])
             lines.append([''])
             lines.append([''])
 
-        render_lines(self.window, lines, padding = [2, 0, 0, 2])
+            displayIdenticon(self.window, thread.uid, self.begin_y + i * 5 + 1, 2)
+
+        render_lines(self.window, lines, padding = [2, 0, 0, 8])
 
 
 class MessengerChatWindow(Window):
@@ -290,7 +294,6 @@ class MessengerChatWindow(Window):
         for line in processed_text:
             # wrap the line
             wrapped_line = wrapLine(line, int(self.mwidth * 0.4))
-            print(wrapped_line)
         
             # render these lines
             self.changeY(-len(wrapped_line))
@@ -307,7 +310,7 @@ class MessengerChatWindow(Window):
 
     def add(self, message_object, align = "<", display = None, next_max_length = 0, color = None, show_hash = False):
         # process text 
-        if display == 'join-bottom':
+        if display == 'join-bottom' or display == 'join-bottom-reply':
             pass
 
         else:
@@ -319,7 +322,6 @@ class MessengerChatWindow(Window):
         for line in processed_text:
             # wrap the line
             wrapped_line = wrapLine(line, int(self.mwidth * 0.4))
-            print(wrapped_line)
         
             # render these lines
             self.changeY(-len(wrapped_line))
@@ -350,8 +352,15 @@ class MessengerChatWindow(Window):
         self.addstr(self.current_y, start_x, "┌" + "─" * (max_length + 2) + "┐", color)
         
         # render bottom border
-        self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" + "─" * (max_length + 2) + "┘", color)
-
+        if display == 'join-bottom-reply':
+            if align == '<':
+                self.addstr(self.current_y + len(renderable_lines) + 1, start_x + next_max_length + 4, "─" * (max_length - next_max_length - 1) + "┘" * ((max_length - next_max_length) > 0), color)
+            elif align == '>':
+                self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" * (max_length > next_max_length) + '─' * (max_length - next_max_length - 1), color)
+            
+        else:
+            self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" + "─" * (max_length + 2) + "┘", color)
+    
         # render left border
         for h in range (len(renderable_lines)):
             self.addch(self.current_y + h + 1, start_x, "│", color)
@@ -464,7 +473,6 @@ class MessengerChatWindow(Window):
 
         for i, m in enumerate(messages):
             messages_to_render.append(m)
-            print(m)
             m.is_replied_to = False
 
             if m.replied_to:
@@ -488,10 +496,12 @@ class MessengerChatWindow(Window):
             # OR there exists a future message, the author was the same, this current message was not replied to, nor was the future message
             if m.is_replied_to or (future_message and future_message.author == m.author  and not m.replied_to and not future_message.is_replied_to):
 
+                display = 'join-bottom'
                 if m.is_replied_to:
                     color = curses.color_pair(4)
+                    display = 'join-bottom-reply'
 
-                future_message_max_length = self.add(m, display = 'join-bottom', align = align, next_max_length = future_message_max_length, color = color, show_hash = self.M.show_hash)
+                future_message_max_length = self.add(m, display = display, align = align, next_max_length = future_message_max_length, color = color, show_hash = self.M.show_hash)
 
                 # if this is the message someone replied to, render the reply description
 
@@ -548,7 +558,6 @@ class MessengerChatWindow(Window):
         # we actually haven't filled up the screen, in that case request more messages
         # or if there were still less than 10 messages to render by the time we broke
         if self.current_y > 1 or i > len(messages_to_render) - 10:
-            print("\n\n\n REQUESTING NEW MESSAGES \n\n\n")
             new_messages = self.client.fetchThreadMessages(
                 self.M.getActiveThread().uid,
                 before = self.M.getActiveMessages()[-1].timestamp,
@@ -782,7 +791,11 @@ class MessengerTextBox(Window):
         elif a != -1:
             # send a read notification
             if not self.M.threads[self.M.active_thread].read:
-                self.client.markAsRead(self.M.threads[self.M.active_thread].uid)
+                try:
+                    self.client.markAsRead(self.M.threads[self.M.active_thread].uid)
+                except FBchatFacebookError:
+                    pass
+                
                 self.M.threads[self.M.active_thread].read = True
 
             char = str(chr(a))[0]

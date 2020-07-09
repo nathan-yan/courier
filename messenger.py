@@ -28,9 +28,14 @@ import pickle
 import os.path
 from os import path
 import json
+import requests
+from io import BytesIO
 
 from window import *
 import utils
+
+import colorama
+colorama.init()
 
 locale.setlocale(locale.LC_ALL, "");
 
@@ -48,13 +53,13 @@ class Messenger:
             self.thread_priority.append([len(self.threads) - i, i])
 
         self.messages = messages
-
         self.active_thread = 1
-
         self.show_hash = False
-
         self.force_update = False
-    
+
+        self.thread_pictures = {}
+        
+
     def getActiveThread(self):
         return self.threads[self.active_thread]
     
@@ -73,8 +78,6 @@ class MessengerClient(Client):
         self.markAsDelivered(thread_id, mid)
 
         curses.beep()
-
-        print("RECEIVED MESSAGE", message_object)
 
         for i in range (len(self.messenger.threads)):
             # if you've received a message mark the read flag in self.messenger as false
@@ -99,7 +102,22 @@ class MessengerClient(Client):
             
                 tid = self.messenger.threads[self.messenger.active_thread].uid
                 
-                break;
+                return;
+        
+        # we haven't found the thread, it's a new one!
+        # get the thread
+        thread_info = self.fetchThreadInfo(thread_id)
+        
+        # fetch thread messages
+        thread_messages = self.fetchThreadMessages(thread_info, limit = 20)
+
+        # append to the respective arrays, add a new entry into the priority queue
+        self.messenger.threads.append(thread_info)
+        self.messenger.messages.append(thread_messages)
+
+        max_priority = self.messenger.thread_priority[0][0]
+        self.messenger.thread_priority.insert(0, [max_priority + 1, len(self.messenger.threads) - 1])
+        
 
     def onMessageSeen(self, seen_by, thread_id, thread_type, seen_ts, ts, metadata, msg):
         for i in range (len(self.messenger.threads)):
@@ -256,7 +274,7 @@ def main(stdscr):
     curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
     curses.init_pair(3, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
-    curses.init_pair(4, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(4, 8, curses.COLOR_BLACK)
     curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
     
     stdscr.nodelay(True)
@@ -265,7 +283,6 @@ def main(stdscr):
     mheight, mwidth = stdscr.getmaxyx()
 
     aenum.extend_enum(MessageReaction, "UNKNOWN_{}".format('💗'), '💗')
-    print(MessageReaction)
     #pretty.pprint(threads)
     #pretty.pprint(threadlist)
 
@@ -334,7 +351,7 @@ def main(stdscr):
     stdscr.refresh()
 
     threads = client.fetchThreadList(limit = 10)
-    messages = [client.fetchThreadMessages(threads[i].uid, limit = 2) for i in range (len(threads))]
+    messages = [client.fetchThreadMessages(threads[i].uid, limit = 20) for i in range (len(threads))]
     users = client.fetchAllUsersFromThreads(threads)
     
     for t, m in zip(threads, messages):
@@ -343,7 +360,6 @@ def main(stdscr):
         else:
             t.read = True
         t.start = 0
-
 
     user_dict = {}
     for u in users:
@@ -367,14 +383,15 @@ def main(stdscr):
     
     # create messenger object
     M = Messenger(personal_id,  user_dict, threads, messages,)
+    
     client.setMessenger(M)
     M.active_thread = 0
 
     print(mwidth, mheight)
-    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * 0.8) - 15, 0, int(mwidth * 0.2) + 6)
+    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * 0.75) - 15, 0, int(mwidth * 0.25) + 6)
 
-    thread_window = MessengerThreadWindow(client, M, stdscr, mheight - 1, int(mwidth * 0.2), 1, 0)
-    textbox = MessengerTextBox(client, M, stdscr, 3, int(mwidth * 0.8) - 15, mheight - 4, int(mwidth * 0.2) + 10)
+    thread_window = MessengerThreadWindow(client, M, stdscr, mheight - 1, int(mwidth * 0.25), 1, 0)
+    textbox = MessengerTextBox(client, M, stdscr, 3, int(mwidth * 0.75) - 15, mheight - 4, int(mwidth * 0.25) + 10)
 
     stdscr.clear()
 
@@ -416,7 +433,7 @@ def main(stdscr):
 
         textbox.render()
         textbox.refresh()
-        
+
     #dt.start()
     #lt.start()
 
