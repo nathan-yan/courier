@@ -279,14 +279,6 @@ def main(stdscr):
     curses.init_pair(3, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
     curses.init_pair(4, 8, curses.COLOR_BLACK)
     curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
-
-    with open("settings.json", 'r') as f:
-        settings = json.loads(f.read())
-
-    if (curses.can_change_color()):
-        default_theme = settings['defaultTheme']
-        mapping = settings['themes'][default_theme]
-        #utils.assignColors(mapping)
     
     stdscr.nodelay(True)
     curses.curs_set(0)
