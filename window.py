@@ -85,13 +85,15 @@ class Window:
 
 
 class MessengerThreadWindow(Window):
-    def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x):
+    def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x, compact = False):
         super().__init__(stdscr, height, width, begin_y, begin_x)
 
         self.client = client
         self.M = messenger_obj
 
         self.init_pairs = True
+
+        self.compact = compact
 
     def render(self):
         self.window.clear()
@@ -103,7 +105,7 @@ class MessengerThreadWindow(Window):
         self.addstr(1, 0, ' ' * (self.mwidth - 1) + u"│")
 
         for i in range (self.mheight - 2):
-            if (i + 1) % 5 == 0 and i != 0 and (i + 1) // 5 < len(self.M.threads):
+            if (i + 1) % (5 - 2 * self.compact) == 0 and i != 0 and (i + 1) // (5 - 2 * self.compact) < len(self.M.threads):
                 self.addch(i + 1, self.mwidth - 1, u'┤')
                 self.addch(i + 1, 0, u'├')
             else:    
@@ -119,7 +121,10 @@ class MessengerThreadWindow(Window):
             messages = self.M.messages[thread_idx]
 
             # draw separators
-            self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
+            if self.compact:
+                self.addstr(i * 3, 1, u"─" * (self.mwidth - 2))
+            else:
+                self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
 
             if messages[0].text:
                 last = ellipses(self.window, self.M.user_dict[messages[0].author].name + ": " + messages[0].text.encode('ascii', 'ignore').decode(), 9)
@@ -143,18 +148,19 @@ class MessengerThreadWindow(Window):
                     []
                 ])
 
-            lines.append([''])
-            lines.append([''])
+            if not self.compact:
+                lines.append([''])
+                lines.append([''])
             lines.append([''])
             
             if (self.begin_y + i * 5 + 1) < self.mheight - 2:
-                displayIdenticon(self.window, thread.uid, self.begin_y + i * 5 + 1, 2)
+                displayIdenticon(self.window, thread.uid, self.begin_y + i * (5 - 2 * self.compact) + 1 - self.compact, 2)
 
-        render_lines(self.window, lines, padding = [2, 0, 0, 8])
+        render_lines(self.window, lines, padding = [2 - self.compact, 0, 0, 8])
 
 
 class MessengerChatWindow(Window):
-    def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x):
+    def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x, compact = False):
         super().__init__(stdscr, height, width, begin_y, begin_x)
         
         self.client = client
@@ -163,6 +169,8 @@ class MessengerChatWindow(Window):
         self.current_y = self.mheight
 
         self.MARGIN = 6
+
+        self.compact = compact
 
     # todo: should move these bottom 3 methods to utils
     def processMessageText(self, msg):
@@ -337,8 +345,16 @@ class MessengerChatWindow(Window):
         if align == '>':
             padding_left = self.mwidth - 2 - 2 - max_length - self.MARGIN
 
-        render_lines(self.window, renderable_lines, padding = [self.current_y, 2, 0, padding_left], align = "<", default_color = color)
-        self.changeY(-1)
+        if self.compact:
+            if align == '<':
+                padding_left -= 2
+            else:
+                padding_left += 2
+
+        render_lines(self.window, renderable_lines, padding = [self.current_y + 1 * self.compact, 2, 0, padding_left], align = "<", default_color = color)
+
+        if not self.compact:
+            self.changeY(-1)
 
         # draw a box
         
@@ -347,28 +363,29 @@ class MessengerChatWindow(Window):
         else:
             start_x = 0 + self.MARGIN
 
-        # render top border
-        self.addstr(self.current_y, start_x, "┌" + "─" * (max_length + 2) + "┐", color)
-        
-        # render bottom border
-        if display == 'join-bottom-reply':
-            if align == '<':
-                self.addstr(self.current_y + len(renderable_lines) + 1, start_x + next_max_length + 4, "─" * (max_length - next_max_length - 1) + "┘" * ((max_length - next_max_length) > 0), color)
-            elif align == '>':
-                self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" * (max_length > next_max_length) + '─' * (max_length - next_max_length - 1), color)
+        if not self.compact:
+            # render top border
+            self.addstr(self.current_y, start_x, "┌" + "─" * (max_length + 2) + "┐", color)
             
-        else:
-            self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" + "─" * (max_length + 2) + "┘", color)
-    
-        # render left border
-        for h in range (len(renderable_lines)):
-            self.addch(self.current_y + h + 1, start_x, "│", color)
+            # render bottom border
+            if display == 'join-bottom-reply':
+                if align == '<':
+                    self.addstr(self.current_y + len(renderable_lines) + 1, start_x + next_max_length + 4, "─" * (max_length - next_max_length - 1) + "┘" * ((max_length - next_max_length) > 0), color)
+                elif align == '>':
+                    self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" * (max_length > next_max_length) + '─' * (max_length - next_max_length - 1), color)
+                
+            else:
+                self.addstr(self.current_y + len(renderable_lines) + 1, start_x, "└" + "─" * (max_length + 2) + "┘", color)
+        
+            # render left border
+            for h in range (len(renderable_lines)):
+                self.addch(self.current_y + h + 1, start_x, "│", color)
 
-        # render right border
-        for h in range (len(renderable_lines)):
-            self.addch(self.current_y + h + 1, start_x + max_length + 3, "│", color)
+            # render right border
+            for h in range (len(renderable_lines)):
+                self.addch(self.current_y + h + 1, start_x + max_length + 3, "│", color)
 
-        if display == 'join-bottom':
+        if display == 'join-bottom' and not self.compact:
             # figure out where to join
             if next_max_length > max_length:
                 if align == '<':

@@ -390,11 +390,11 @@ def main(stdscr):
     print(mwidth, mheight)
     thread_width = 0.25
 
-    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6)
+    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6, compact = True)
 
     thread_window = MessengerThreadWindow(client, M, stdscr, 
                                                         mheight - 1,
-                                                        int(mwidth * thread_width), 1, 0)
+                                                        int(mwidth * thread_width), 1, 0, compact = True)
 
     textbox = MessengerTextBox(client, M, stdscr, 3, 
                                                         int(mwidth * (1 - thread_width)) - 15, 
