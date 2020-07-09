@@ -217,7 +217,10 @@ def render_lines(window, lines, padding = [0, 0, 0, 0], default_color = None, al
             current_line += 1
 
         else:
-            current_line += 1            
+            current_line += 1
+
+        if current_line > mheight - padding[2]:
+            break;            
 
 def wrapLine(line, max_length):
 

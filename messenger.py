@@ -55,6 +55,8 @@ class Messenger:
         self.force_update = False
 
         self.thread_pictures = {}
+
+        self.compact = True    # are we rendering in compact mode
         
 
     def getActiveThread(self):
@@ -350,7 +352,7 @@ def main(stdscr):
 
     stdscr.refresh()
 
-    threads = client.fetchThreadList(limit = 10)
+    threads = client.fetchThreads(ThreadLocation.INBOX, limit = 20)
     messages = [client.fetchThreadMessages(threads[i].uid, limit = 20) for i in range (len(threads))]
     users = client.fetchAllUsersFromThreads(threads)
     
@@ -390,11 +392,11 @@ def main(stdscr):
     print(mwidth, mheight)
     thread_width = 0.25
 
-    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6, compact = True)
+    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6)
 
     thread_window = MessengerThreadWindow(client, M, stdscr, 
                                                         mheight - 1,
-                                                        int(mwidth * thread_width), 1, 0, compact = True)
+                                                        int(mwidth * thread_width), 1, 0)
 
     textbox = MessengerTextBox(client, M, stdscr, 3, 
                                                         int(mwidth * (1 - thread_width)) - 15, 
