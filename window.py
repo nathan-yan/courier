@@ -24,8 +24,6 @@ from fbchat.models import *
 
 from utils import *
 
-from PIL import Image
-
 color_search = re.compile("\${[0-9]}")
 url_search = re.compile('(?:(?:https?|ftp):\/\/)?[\w/\-?=%#&.]+\.[\w/\-?=%#&.]+')
 

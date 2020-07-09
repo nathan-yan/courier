@@ -4,11 +4,23 @@ from curses.textpad import Textbox
 import random
 import locale 
 
-from PIL import Image
-
 import base64
 import hashlib
 
+def hex2RGB(h, scale = 1000/256):
+    h = h.lstrip('#')
+
+    rgb = [int(int(h[i : i + 2], 16) * scale) for i in (0, 2, 4)]
+    return rgb
+
+def assignColors(mapping):
+    colors = ['black', 'blue', 'green', 'cyan', 'red', 'magenta', 'yellow', 'white', 'lightBlack', 'lightBlue', 'lightGreen', 'lightCyan', 'lightRed', 'lightMagenta', 'lightYellow', 'lightWhite']
+
+    #curses.start_color()
+
+    #for i, c in enumerate(colors): 
+    #    curses.init_color(i, *hex2RGB(mapping[c]))
+    #    print(curses.color_content(i))
 
 def displayImage(window, array, begin_y, begin_x, init_pairs = False, img_idx = 0):
     # target resolution is 4 x 4 characters so 8 x8 resolution
