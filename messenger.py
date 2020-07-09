@@ -109,10 +109,13 @@ class MessengerClient(Client):
         thread_info = self.fetchThreadInfo(thread_id)
         
         # fetch thread messages
-        thread_messages = self.fetchThreadMessages(thread_info, limit = 20)
+        thread_messages = self.fetchThreadMessages(thread_id, limit = 20)
 
         # append to the respective arrays, add a new entry into the priority queue
-        self.messenger.threads.append(thread_info)
+        thread_info[thread_id].start = 0
+        thread_info[thread_id].read = False
+
+        self.messenger.threads.append(thread_info[thread_id])
         self.messenger.messages.append(thread_messages)
 
         max_priority = self.messenger.thread_priority[0][0]
@@ -276,6 +279,14 @@ def main(stdscr):
     curses.init_pair(3, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
     curses.init_pair(4, 8, curses.COLOR_BLACK)
     curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
+
+    with open("settings.json", 'r') as f:
+        settings = json.loads(f.read())
+
+    if (curses.can_change_color()):
+        default_theme = settings['defaultTheme']
+        mapping = settings['themes'][default_theme]
+        #utils.assignColors(mapping)
     
     stdscr.nodelay(True)
     curses.curs_set(0)
@@ -388,10 +399,18 @@ def main(stdscr):
     M.active_thread = 0
 
     print(mwidth, mheight)
-    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * 0.75) - 15, 0, int(mwidth * 0.25) + 6)
+    thread_width = 0.25
 
-    thread_window = MessengerThreadWindow(client, M, stdscr, mheight - 1, int(mwidth * 0.25), 1, 0)
-    textbox = MessengerTextBox(client, M, stdscr, 3, int(mwidth * 0.75) - 15, mheight - 4, int(mwidth * 0.25) + 10)
+    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6)
+
+    thread_window = MessengerThreadWindow(client, M, stdscr, 
+                                                        mheight - 1,
+                                                        int(mwidth * thread_width), 1, 0)
+
+    textbox = MessengerTextBox(client, M, stdscr, 3, 
+                                                        int(mwidth * (1 - thread_width)) - 15, 
+                                                        mheight - 4, 
+                                                        int(mwidth * thread_width) + 10)
 
     stdscr.clear()
 

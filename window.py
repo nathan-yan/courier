@@ -146,8 +146,9 @@ class MessengerThreadWindow(Window):
             lines.append([''])
             lines.append([''])
             lines.append([''])
-
-            displayIdenticon(self.window, thread.uid, self.begin_y + i * 5 + 1, 2)
+            
+            if (self.begin_y + i * 5 + 1) < self.mheight - 2:
+                displayIdenticon(self.window, thread.uid, self.begin_y + i * 5 + 1, 2)
 
         render_lines(self.window, lines, padding = [2, 0, 0, 8])
 
