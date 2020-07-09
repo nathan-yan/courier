@@ -34,9 +34,6 @@ from io import BytesIO
 from window import *
 import utils
 
-import colorama
-colorama.init()
-
 locale.setlocale(locale.LC_ALL, "");
 
 class Messenger:
