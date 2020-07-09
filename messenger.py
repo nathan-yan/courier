@@ -58,7 +58,6 @@ class Messenger:
 
         self.compact = True    # are we rendering in compact mode
         
-
     def getActiveThread(self):
         return self.threads[self.active_thread]
     
@@ -352,7 +351,7 @@ def main(stdscr):
 
     stdscr.refresh()
 
-    threads = client.fetchThreads(ThreadLocation.INBOX, limit = 20)
+    threads = client.fetchThreadList(limit = 20)
     messages = [client.fetchThreadMessages(threads[i].uid, limit = 20) for i in range (len(threads))]
     users = client.fetchAllUsersFromThreads(threads)
     
