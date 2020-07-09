@@ -185,6 +185,8 @@ def render_lines(window, lines, padding = [0, 0, 0, 0], default_color = None, al
                 # set the current_x to mwidth - padding[1] (right) - len(line[0])
                 current_x = mwidth - 2 - padding[1] - len(line[0])
 
+            elif alignment == '^':
+                current_x = mwidth // 2 - len(line[0]) // 2
 
             for instruction in line[1]:
                 if type(instruction) == str:
@@ -193,6 +195,11 @@ def render_lines(window, lines, padding = [0, 0, 0, 0], default_color = None, al
                 # add normal text that comes before the instruction
                 
                 # when inserting default_color, the begin_
+                if instruction[0] < 0:
+                    instruction[0] = len(line[0]) - instruction[0]
+                
+                if instruction[1] < 0:
+                    instruction[1] = len(line[0]) - instruction[1]
 
                 if default_color:
                     window.addstr(current_line, current_x, line[0][current_text_pointer:instruction[0]], default_color)
