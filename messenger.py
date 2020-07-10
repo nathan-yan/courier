@@ -60,7 +60,10 @@ class Messenger:
 
         self.compact = True    # are we rendering in compact mode
         self.peek_hash = ""
+        self.thread_start = 0
         
+        self.last_thread_timestamp = self.threads[-1].last_message_timestamp
+
     def getActiveThread(self):
         return self.threads[self.active_thread]
     
@@ -69,7 +72,7 @@ class Messenger:
 
     def updateSettings(self):
         with open("settings.json", 'w') as f:
-            f.write(json.dumps(self.settings))
+            f.write(json.dumps(self.settings, indent = 4))
 
 class MessengerClient(Client):
     def __init__(self, username, password, max_tries = 2, session_cookies = ""):
@@ -114,7 +117,7 @@ class MessengerClient(Client):
         thread_info = self.fetchThreadInfo(thread_id)
         
         # fetch thread messages
-        thread_messages = self.fetchThreadMessages(thread_id, limit = 20)
+        thread_messages = self.fetchThreadMessages(thread_id, limit = 2)
 
         # append to the respective arrays, add a new entry into the priority queue
         thread_info[thread_id].start = 0
@@ -126,7 +129,6 @@ class MessengerClient(Client):
         max_priority = self.messenger.thread_priority[0][0]
         self.messenger.thread_priority.insert(0, [max_priority + 1, len(self.messenger.threads) - 1])
         
-
     def onMessageSeen(self, seen_by, thread_id, thread_type, seen_ts, ts, metadata, msg):
         for i in range (len(self.messenger.threads)):
             if self.messenger.threads[i].uid == thread_id:
@@ -302,7 +304,10 @@ def main(stdscr):
     if not path.exists("settings.json"):
         with open("settings.json", 'w') as f:
             f.write(
-                json.dumps({})
+                json.dumps({
+                    "pinnedThreads" : {},
+                    "compact" : False
+                }, indent = 4)
             )
         
     with open("settings.json", "r") as f:
@@ -353,7 +358,7 @@ def main(stdscr):
 
     with open("cookies.json", 'w') as f:
         # we have succesfully logged in, save cookies
-        f.write(json.dumps(client.getSession()))
+        f.write(json.dumps(client.getSession(), indent = 4))
 
     # get personal_id
     personal_id = client.uid
@@ -366,7 +371,7 @@ def main(stdscr):
     stdscr.refresh()
 
     threads = client.fetchThreadList(limit = 20)
-
+    
     stdscr.clear()
     lines = constants.splash_page + ['', 'fetching messages...']
     starty, startx, lasty = showPage(stdscr, lines, height_offset = 0)

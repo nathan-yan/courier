@@ -108,7 +108,7 @@ class MessengerThreadWindow(Window):
         for i in range (self.mheight - 2):
             remaining_lines = self.mheight - (i + 1)
 
-            if (i + 1) % (5 - 2 * self.M.compact) == 0 and i != 0 and (i + 1) // (5 - 2 * self.M.compact) < len(self.M.threads) and remaining_lines > 5:
+            if (i + 1) % (5 - 2 * self.M.settings['compact']) == 0 and i != 0 and (i + 1) // (5 - 2 * self.M.settings['compact']) < len(self.M.threads) and remaining_lines > 5:
                 self.addch(i + 1, self.mwidth - 1, u'┤')
                 self.addch(i + 1, 0, u'├')
             else:    
@@ -117,29 +117,34 @@ class MessengerThreadWindow(Window):
         
         self.addstr(self.mheight - 2, 0, u"└" + u"─" * (self.mwidth - 2) + u"┘")
 
-        for i, priority in enumerate(self.M.thread_priority):
+        for i, priority in enumerate(self.M.thread_priority[self.M.thread_start:]):
             thread_idx = priority[1]
 
             thread = self.M.threads[thread_idx]
             messages = self.M.messages[thread_idx]
 
             # draw separators
-            remaining_lines = self.mheight - (i * (5 - 2 * self.M.compact))
+            remaining_lines = self.mheight - (i * (5 - 2 * self.M.settings['compact']))
             if remaining_lines > 5:
-                if self.M.compact:
+                if self.M.settings['compact']:
                     self.addstr(i * 3, 1, u"─" * (self.mwidth - 2))
                 else:
                     self.addstr(i * 5, 1, u"─" * (self.mwidth - 2))
 
-            if messages[0].text:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": " + messages[0].text.encode('ascii', 'ignore').decode().replace("\n", ''), 9)
-            else:
-                last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": ?", 9)
+            try:
+                if messages[0].text:
+                    last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": " + messages[0].text.encode('ascii', 'ignore').decode().replace("\n", ''), 9)
+                else:
+                    last = ellipses(self.window, self.M.user_dict[messages[0].author].name.split(" ")[0] + ": ?", 
+                    9)
+            except KeyError:
+                # author can't be found
+                last = "? : ?"
 
             pinned_code = self.M.settings['pinnedThreads'].get(thread.uid)
 
             code = pinned_code if pinned_code else produceHashThread(thread)[:3]
-            name = ellipses(self.window, code + " " + thread.name, 9)
+            name = ellipses(self.window, code + " " + str(thread.name), 9)
             lines.append([
                 name,
                 [(0, len(code), curses.color_pair(2)), (len(code) + 1, len(name), curses.color_pair(curses.COLOR_BLUE) | (curses.A_REVERSE) * (thread_idx == self.M.active_thread))]
@@ -156,18 +161,44 @@ class MessengerThreadWindow(Window):
                     []
                 ])
 
-            if not self.M.compact:
+            if not self.M.settings['compact']:
                 lines.append([''])
                 lines.append([''])
             lines.append([''])
                                 
                                 # beginy       thread position, account for compactness
-            start_identicon_y = self.begin_y + i * (5 - 2 * self.M.compact) + 1 - self.M.compact
+            start_identicon_y = self.begin_y + i * (5 - 2 * self.M.settings['compact']) + 1 - self.M.settings['compact']
             if (start_identicon_y) < self.mheight - 4:
                 displayIdenticon(self.window, thread.uid, start_identicon_y, 2)
 
-        render_lines(self.window, lines, padding = [2 - self.M.compact, 0, 5, 8])
+        render_lines(self.window, lines, padding = [2 - self.M.settings['compact'], 0, 5, 8])
 
+        # if there's only 20 extra lines to render, load more threads
+        if (len(lines) - self.mheight) < 20:
+            new_threads = self.client.fetchThreadList(limit = 20, 
+                                             before = self.M.last_thread_timestamp)[1:]
+
+            new_messages = [self.client.fetchThreadMessages(new_threads[i].uid, limit = 2) for i in range (len(new_threads))]
+
+            # update the last_thread_timestamp
+            self.M.last_thread_timestamp = new_threads[-1].last_message_timestamp
+
+            # grab new users
+            new_users = self.client.fetchAllUsersFromThreads(new_threads)
+            for u in new_users:
+                self.M.user_dict[u.uid] = u
+
+            for i, t in enumerate(new_threads):
+                t.start = 0
+                t.read = False
+            
+                min_priority = self.M.thread_priority[-1][0]
+                self.M.thread_priority.append([min_priority - 1 - i, len(self.M.threads) + i])
+            
+            self.M.thread_priority.sort(reverse = True)
+
+            self.M.threads += new_threads
+            self.M.messages += new_messages
 
 class MessengerChatWindow(Window):
     def __init__(self, client, messenger_obj, stdscr, height, width, begin_y, begin_x):
@@ -356,15 +387,15 @@ class MessengerChatWindow(Window):
         if align == '>':
             padding_left = self.mwidth - 2 - 2 - max_length - self.MARGIN
 
-        if self.M.compact:
+        if self.M.settings['compact']:
             if align == '<':
                 padding_left -= 2
             else:
                 padding_left += 2
 
-        render_lines(self.window, renderable_lines, padding = [self.current_y + 1 * self.M.compact, 2, 0, padding_left], align = "<", default_color = color)
+        render_lines(self.window, renderable_lines, padding = [self.current_y + 1 * self.M.settings['compact'], 2, 0, padding_left], align = "<", default_color = color)
 
-        if not self.M.compact:
+        if not self.M.settings['compact']:
             self.changeY(-1)
 
         # draw a box
@@ -374,7 +405,7 @@ class MessengerChatWindow(Window):
         else:
             start_x = 0 + self.MARGIN
 
-        if not self.M.compact:
+        if not self.M.settings['compact']:
             # render top border
             self.addstr(self.current_y, start_x, "┌" + "─" * (max_length + 2) + "┐", color)
             
@@ -396,7 +427,7 @@ class MessengerChatWindow(Window):
             for h in range (len(renderable_lines)):
                 self.addch(self.current_y + h + 1, start_x + max_length + 3, "│", color)
 
-        if display == 'join-bottom' and not self.M.compact:
+        if display == 'join-bottom' and not self.M.settings['compact']:
             # figure out where to join
             if next_max_length > max_length:
                 if align == '<':
@@ -594,14 +625,14 @@ class MessengerChatWindow(Window):
                         p2 = "You" if m.author == self.M.ME else self.M.user_dict[m.author].name
                         description = "%s -> %s" % (p1, p2)
 
-                    if not self.M.compact:
+                    if not self.M.settings['compact']:
                         self.changeY(-1)
 
                     # render the description
                     render_lines(
                             self.window, 
                             [[description, [[0, len(description), curses.color_pair(3)]]]],
-                            padding = [self.current_y, 2 + self.MARGIN - 2 * self.M.compact, 0, self.MARGIN],
+                            padding = [self.current_y, 2 + self.MARGIN - 2 * self.M.settings['compact'], 0, self.MARGIN],
                             align = ">" if future_message.author == self.M.ME else "<"
                         )
                     
@@ -609,7 +640,7 @@ class MessengerChatWindow(Window):
 
             else:
                 if future_message and future_message.author != self.M.ME and not future_message.is_replied_to:
-                    if not self.M.compact:
+                    if not self.M.settings['compact']:
                         self.changeY(-1)
                     author_name =self.M.user_dict[future_message.author].name
 
@@ -661,7 +692,7 @@ class MessengerChatWindow(Window):
 
             active_messages = self.M.getActiveMessages()
             active_messages += new_messages[1:]
-            self.render()
+            #self.render()
 
         """
         queued_messages = []
@@ -812,6 +843,13 @@ class MessengerTextBox(Window):
             if self.M.getActiveThread().start >= 5:
                 self.M.getActiveThread().start -= 5
 
+        elif a == curses.CTL_DOWN:
+            self.M.thread_start += 4
+
+        elif a == curses.CTL_UP:
+            if self.M.thread_start >= 4:
+                self.M.thread_start -= 4
+
         elif a == 10:
             # send the text
 
@@ -835,9 +873,9 @@ class MessengerTextBox(Window):
 
             if self.text and self.text[0] in ':@':
                 if matchBeginning(self.text, [":compact"]):
-                    self.M.compact = not self.M.compact
+                    self.M.settings['compact'] = not self.M.settings['compact']
                     send_msg = False
-                
+
                 elif matchBeginning(self.text, [':pin']):
                     name = self.text.split(' ')[1]
 
@@ -858,6 +896,60 @@ class MessengerTextBox(Window):
 
                 elif matchBeginning(self.text, [':switch', ':s ']):
                     thread_code = self.text.split(" ")[1]
+
+                    if (thread_code in ['-u', '-t', '-f']):   
+                        # -u = users
+                        # -t = threads
+                        # -f = fuzzy (everything)
+                        
+                        name = ' '.join(self.text.split(" ")[2:])
+
+                        try:
+                            if thread_code == '-u':
+                                thread = self.client.searchForUsers(name, limit = 1)[0]
+                            elif thread_code == '-t':
+                                thread = self.client.searchForGroups(name, limit = 1)[0]
+                            elif thread_code == '-f':
+                                thread = self.client.searchForThreads(name, limit = 1)[0]
+
+                        except FBchatException as e:
+                            print(e, 'matchBeginning :switch')
+                    
+                            send_msg = False
+                        except IndexError as e:
+                            print(e, "matchBegining :switch, index")
+                            send_msg = False
+                        else:
+                            # check if the thread already exists
+                            for i, t in enumerate(self.M.threads):
+                                if t.uid == thread.uid:
+                                    self.M.active_thread = i
+                                    break; 
+                            else: 
+                                # thread does not exist, there is no need to add it to priority queue, cuz we won't actually display it 
+                                # # there is not point in displaying a possibly old thread 
+                                # plus if you actually say something it will percolate to the top anyway
+                                 
+                                # get thread info
+                                thread_info = self.client.fetchThreadInfo(thread.uid)
+                                
+                                # fetch thread messages
+                                thread_messages = self.client.fetchThreadMessages(thread.uid, limit = 20)
+                                
+                                if thread_messages:
+                                    new_users = self.client.fetchAllUsersFromThreads([thread])
+                                    for u in new_users:
+                                        self.M.user_dict[u.uid] = u
+
+                                    thread_info[thread.uid].start = 0
+                                    thread_info[thread.uid].read = False 
+
+                                    self.M.threads.append(thread_info[thread.uid])
+                                    self.M.messages.append(thread_messages)
+
+                                    self.M.active_thread = len(self.M.threads) - 1
+
+                            send_msg = False
 
                     for i, t in enumerate(self.M.threads):
                         if self.M.settings['pinnedThreads'].get(t.uid) == thread_code or produceHashThread(t)[:3] == thread_code:
