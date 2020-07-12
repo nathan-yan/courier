@@ -213,6 +213,7 @@ class MessengerChatWindow(Window):
         self.MARGIN = 6
 
         self.rendered_modal = False
+        self.c = 0  # counter for rendering aesthetics 
 
     # todo: should move these bottom 3 methods to utils
     def processMessageText(self, msg):
@@ -348,6 +349,10 @@ class MessengerChatWindow(Window):
             self.changeY(-len(wrapped_line))
             renderable_lines += wrapped_line
         
+        if message_object.unsent:
+            renderable_lines = [["message removed", [[0, len("message removed"), curses.color_pair(4)]]]]
+            self.changeY(-1)        # because we're inserting a line
+
         if not renderable_lines:
             renderable_lines = [["cannot render", [[0, len("cannot render"), curses.color_pair(2)]]]]
 
@@ -376,6 +381,10 @@ class MessengerChatWindow(Window):
             self.changeY(-len(wrapped_line))
             renderable_lines += wrapped_line
         
+        if message_object.unsent:
+            renderable_lines = [["message removed", [[0, len("message removed"), curses.color_pair(4)]]]]
+            self.changeY(-1)        # because we're inserting a line
+
         if not renderable_lines:
             renderable_lines = [["cannot render", [[0, len("cannot render"), curses.color_pair(2)]]]]
 
@@ -542,24 +551,54 @@ class MessengerChatWindow(Window):
         return max_length
         
     def render(self):
+        self.c += 1
+
         start = self.M.getActiveThread().start
 
         self.window.clear()
 
         lines = []
-        self.current_y = self.mheight - 3
+        self.current_y = self.mheight - 4
         messages = self.M.messages[self.M.active_thread][start:]
 
          # render the read_by
         if messages[0].read_by and start == 0:
             read_by_description = "Read by "
 
-            for uid in messages[0].read_by:
+            for i, uid in enumerate(messages[0].read_by):
                 name = self.M.user_dict[uid].name
                 read_by_description += name + ", "
+
+                if len(read_by_description) > self.mwidth * 0.6:
+                    # stop here
+                    read_by_description = read_by_description[:-2]
+                    read_by_description += " and %s more" % (len(messages[0].read_by) - i)
+                    break;
+            else:
+                read_by_description = read_by_description[:-2]
+
+            self.addstr(self.current_y + 3, self.MARGIN, read_by_description)
+
+            self.addstr(self.current_y + 3, self.MARGIN, read_by_description)
+
+        #if self.c % 3 == 0:
+        typing_description = ""
+        user_count = 0
+        users_typing = self.M.users_typing.get(self.M.getActiveThread().uid)
+
+        if users_typing:
+            for typing_user in users_typing:
+                name = self.M.user_dict[typing_user].name
+                typing_description += name + ", "
+                user_count += 1 
             
-            read_by_description = read_by_description[:-2]
-            self.addstr(self.current_y + 2, self.MARGIN, read_by_description)
+            typing_description = typing_description[:-2]
+            if user_count == 1:
+                typing_description += " is typing"
+            elif user_count > 1:
+                typing_description += " are typing"
+            
+            self.addstr(self.current_y + 1, self.MARGIN, ["▪", "◼"][(self.c) % 2] + " " + typing_description)
 
         # messages are from most recent to latest
 
@@ -894,7 +933,7 @@ class MessengerTextBox(Window):
                     
                     send_msg = False
 
-                elif matchBeginning(self.text, [':switch', ':s ']):
+                elif matchBeginning(self.text, [':switch', ':s ', ":S", ":Switch"]):
                     thread_code = self.text.split(" ")[1]
 
                     if (thread_code in ['-u', '-t', '-f']):   
@@ -992,6 +1031,10 @@ class MessengerTextBox(Window):
                                 
                                 elif command == 'cls':
                                     self.M.peek_hash = ""
+                                    send_msg = False
+
+                                elif command == 'del':
+                                    self.client.unsend(m.uid)
                                     send_msg = False
                                 
                                 elif command in constants.react_mapping_inv:

@@ -267,6 +267,7 @@ def wrapLine(line, max_length):
     if len(line[0]) > max_length:
         length = len(line[0])
         for i in range (length // max_length):
+            
             line[0] = line[0][:(i + 1) * max_length + i] + '\n' + line[0][(i + 1) * max_length + i:]
     else:
         wrapped_lines.append(line)
