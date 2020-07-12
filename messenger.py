@@ -61,6 +61,8 @@ class Messenger:
         self.compact = True    # are we rendering in compact mode
         self.peek_hash = ""
         self.thread_start = 0
+
+        self.users_typing = {}
         
         self.last_thread_timestamp = self.threads[-1].last_message_timestamp
 
@@ -85,7 +87,7 @@ class MessengerClient(Client):
         # todo: maybe make self.messenger.threads a dictionary?   id -> thread
         self.markAsDelivered(thread_id, mid)
 
-        curses.beep()
+        #curses.beep()
 
         for i in range (len(self.messenger.threads)):
             # if you've received a message mark the read flag in self.messenger as false
@@ -163,6 +165,29 @@ class MessengerClient(Client):
 
                         if self.messenger.active_thread == thread_id:
                             self.messenger.createMessages()
+                        break;
+
+                break;
+        
+    def onTyping(self, author_id, status, thread_id, thread_type, msg):
+        if status == TypingStatus.TYPING:
+            if thread_id not in self.messenger.users_typing:
+                self.messenger.users_typing[thread_id] = set([author_id])
+            else:
+                self.messenger.users_typing[thread_id].add(author_id)
+
+        elif status == TypingStatus.STOPPED and author_id in self.messenger.users_typing[thread_id]:
+            self.messenger.users_typing[thread_id].remove(author_id)
+    
+    def onMessageUnsent(self, mid, author_id, thread_id, thread_type, ts, msg):
+        for i in range (len(self.messenger.threads)):
+            if self.messenger.threads[i].uid == thread_id:
+                #self.messenger.messages[i] = [message_object] + self.messenger.messages[i]
+                for message in self.messenger.messages[i]:
+                    if message.uid == mid:
+                        message.unsent = True
+                        message.text = None
+                        message.attachments = []
                         break;
 
                 break;
@@ -351,7 +376,7 @@ def main(stdscr):
         stdscr.refresh()
 
         try:
-            client = MessengerClient(username, password, max_tries = 2)
+            client = MessengerClient(username, password, max_tries = 1)
             login_done = True
         except FBchatException:
             print("authentication by credentials failed")
