@@ -449,7 +449,7 @@ def main(stdscr):
     print(mwidth, mheight)
     thread_width = 0.25
 
-    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 5, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6)
+    chat_window = MessengerChatWindow(client, M, stdscr, mheight - 4, int(mwidth * (1 - thread_width)) - 15, 0, int(mwidth * thread_width) + 6)
 
     thread_window = MessengerThreadWindow(client, M, stdscr, 
                                                         mheight - 1,
@@ -475,23 +475,24 @@ def main(stdscr):
         c += 1
         time.sleep(0.02)
 
-        if c % 17 == 0 and c % 170 != 0:
+        if c % 17 == 0 and c % (17 * 15) != 0:
             M.force_update = False
 
             # render 
             thread_window.render()
             thread_window.refresh()
+            #pass
 
-        if c % 10 == 0:
+        if c % 15 == 0:
             chat_window.render()
             chat_window.refresh()
+            #pass
 
         #if c % 10 == 0 or c % 17 == 0:
             #peek_modal.render()
             #peek_modal.refresh()
 
-        #try:
-        
+        #try:  
 
         a = stdscr.getch()
 
@@ -505,6 +506,7 @@ def main(stdscr):
         textbox.render()
         textbox.refresh()
 
+        stdscr.noutrefresh()
 
         curses.doupdate()
 

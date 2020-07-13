@@ -228,26 +228,58 @@ class MessengerChatWindow(Window):
 
         clickable_counter = 0
         increment = 0
+        mention_counter = 0     # how far along the text are we? used to count offset across split lines
+        
         # check for links
         for i, line in enumerate(ret):
+            # check for mentions
+            # break each line apart based on mentions
+
+            found_mentions = []
+
+            print(msg.mentions)
+            for mention in msg.mentions:
+                if mention_counter + len(line[0]) >= mention.offset:
+                    line[1].append([mention.offset, mention.offset + mention.length, curses.color_pair(3)]) 
+                    found_mentions.append(mention)
+
             for match in url_search.finditer(line[0]):
                 start, end = match.span()
-                start += increment
-                end += increment
 
-                url = line[0][start:end]
-                msg.clickable.append(url)
+                # check to make sure the span does not cross a mention
+                for mention in found_mentions:
+                    mention_start = mention.offset + increment
+                    mention_end = mention.offset + mention.length + increment
 
-                ret[i][0] = line[0][:start] +\
-                    (url) +\
-                    " [%s]" % (clickable_counter + 1) +\
-                    line[0][end:]
+                    if mention_start <= start <= mention_end or \
+                       mention_start <= end <= mention_end or \
+                       (mention_start <= start and mention_end >= end):
+                        break;
+                else:
+                    start += increment
+                    end += increment
 
-                increment += 4     # there are 12 extra characters added
-                clickable_counter += 1
+                    url = line[0][start:end]
+                    msg.clickable.append(url)
 
-                # add the instructions to line
-                line[1].append([start, end + len(" [%s]" % (clickable_counter + 1)), curses.color_pair(2)])
+                    ret[i][0] = line[0][:start] +\
+                        (url) +\
+                        " [%s]" % (clickable_counter + 1) +\
+                        line[0][end:]
+
+                    extra = len(" [%s]" % (clickable_counter + 1))
+                    increment += extra     # there are 12 extra characters added
+                    clickable_counter += 1
+
+                    # search for all instructions with a start after this one's end, and increment them (for mentions)
+                    shiftInstructions(line[1], end, extra)
+
+                    # add the instructions to line
+                    line[1].append([start, end + extra, curses.color_pair(2)])
+                        
+                line[1].sort()  # sort the instructions by start. since they're non-overlapping it's fine
+
+            mention_counter += 1 + len(line[0])    #newline + len(line)
 
         # check for attachments
         if msg.attachments:
@@ -823,26 +855,62 @@ class MessengerTextBox(Window):
         self.text = ''
         self.prev_text = ''
 
+        self.mentions = []
+        self.autocomplete_matches = []
+        self.autocomplete_modal = curses.newwin(20, 20, 0, 0)
+        self.autocomplete_modal_selection = 0
+        self.rendered_modal = False
+
     def textDelta(self):
         """
             both current and previous are arrays of characters. we assume these are single line inputs with no need for wrapping
         """
 
         # the first thing to do is delete characters at the end if the previous string was longer than the current
-        for i in range (len(self.prev_text) - len(self.text) + 1):
-            self.window.delch(0, 2 + len(self.text) + i - 1)
-        
+        #for i in range (len(self.prev_text) - len(self.text) + 1):
+        #    self.window.delch(1, 2 + len(self.text) + i - 1)
+        self.window.clear()
+
         # now you can safely add str
         
-        self.addstr(0, 2, self.text)
+        self.addstr(1, 2, self.text)
+
+        # for all mentions just overwrite the original text wth colored text, i'd probably make this a render_line later but i'm too lazy rn
+        for mention in self.mentions:
+            # mention[1] is offset
+            # mention[2] is length
+            text = self.text[mention[1] : mention[1] + mention[2]]
+            self.addstr(1, 2 + mention[1], text, curses.color_pair(3))
+    
+    def shiftMentions(self, end, shift, mentions = None):
+        if not mentions: mentions = self.mentions
+
+        for mention in self.mentions:
+            if mention[1] >= end:
+                mention[1] += shift
 
     def processKey(self, a):
+        
         if a == 8:
-            self.window.delch(0, self.cursor_position - 1 + 2)
-            if self.cursor_position > 0:
-                self.text = self.text[:self.cursor_position - 1] + self.text[self.cursor_position:]
+            # if the char we're deleting interesects a mention delete it
+            for i, mention in enumerate(self.mentions):
+                if mention[1] <= self.cursor_position <= mention[1] + mention[2]:
+                    self.text = self.text[:mention[1]] + self.text[mention[1] + mention[2]:]
+                    self.cursor_position = max(0, mention[1])
 
-            self.cursor_position = max(0, self.cursor_position - 1)
+                    # shift all mentions that come after this
+                    self.shiftMentions(mention[1] + mention[2], -mention[2])
+
+                    del self.mentions[i]
+                    break;
+            else:
+
+                if self.cursor_position > 0:
+                    self.text = self.text[:self.cursor_position - 1] + self.text[self.cursor_position:]
+                    self.shiftMentions(self.cursor_position, -1)
+
+                self.cursor_position = max(0, self.cursor_position - 1)
+
         elif a == curses.KEY_LEFT or a == curses.KEY_B1:
             
             self.cursor_position = max(0, self.cursor_position - 1)
@@ -876,10 +944,29 @@ class MessengerTextBox(Window):
             self.text = self.text[:self.cursor_position] + self.text[self.cursor_position + 1:]
 
         elif a == 9 or a == curses.KEY_UP or a == curses.KEY_A2:   # ctrl-I, KEY_A2 is cuz hyper is weird?
-            self.M.getActiveThread().start += 5
+            if self.rendered_modal:
+                if a == 9:   # this is the tab button, in this case we don't go up/down we just autocomplete
+                             # i would've binded this to the enter button but it's so natural for us to tab when autocompleting
+                             # also binding to enter would cause accidental message sends
+
+                    # find the closest @ sign
+                    at_index = self.text.rindex('@', 0, self.cursor_position)
+
+                    name, uid = self.autocomplete_matches[self.autocomplete_modal_selection % len(self.autocomplete_matches)]
+                    self.mentions.append([uid, at_index, len(name) + 1])    # +1 for the @ character
+                    self.text = self.text[:self.cursor_position] + name[self.cursor_position - at_index - 1: ] + " " + self.text[self.cursor_position:]
+
+                    self.cursor_position = at_index + len(name) + 1
+
+                else:
+                    self.autocomplete_modal_selection -= 1
+            else:
+                self.M.getActiveThread().start += 5
         
         elif a == 11 or a == curses.KEY_DOWN or a == curses.KEY_C2:    # ctrl-K, KEY_C2 is cuz hyper is weird?
-            if self.M.getActiveThread().start >= 5:
+            if self.rendered_modal:
+                self.autocomplete_modal_selection += 1
+            elif self.M.getActiveThread().start >= 5 :
                 self.M.getActiveThread().start -= 5
 
         elif a == curses.CTL_DOWN:
@@ -890,8 +977,9 @@ class MessengerTextBox(Window):
                 self.M.thread_start -= 4
 
         elif a == 10:
+            send_msg = True
+        
             # send the text
-
             # strip leading and trailing whitespace
             self.text = self.text.strip()
             if len(self.text) == 0:
@@ -907,12 +995,15 @@ class MessengerTextBox(Window):
                 return True
 
             msg = Message(text = emoji.emojize(self.text))
+            
 
-            send_msg = True
-
-            if self.text and self.text[0] in ':@':
+            if self.text and self.text[0] in ':!':
                 if matchBeginning(self.text, [":compact"]):
                     self.M.settings['compact'] = not self.M.settings['compact']
+                    send_msg = False
+                
+                elif matchBeginning(self.text, ['pcls']):
+                    self.M.peek_hash = ""
                     send_msg = False
 
                 elif matchBeginning(self.text, [':pin']):
@@ -968,7 +1059,7 @@ class MessengerTextBox(Window):
                                 # thread does not exist, there is no need to add it to priority queue, cuz we won't actually display it 
                                 # # there is not point in displaying a possibly old thread 
                                 # plus if you actually say something it will percolate to the top anyway
-                                 
+                                
                                 # get thread info
                                 thread_info = self.client.fetchThreadInfo(thread.uid)
                                 
@@ -998,15 +1089,19 @@ class MessengerTextBox(Window):
                     send_msg = False
                 
                 elif len(self.text) >= 5:
-                   
+                
                     code = self.text[1:5]
                     for m in self.M.messages[self.M.active_thread]:
                         if produceHash(m)[:4] == code:
 
                             # we're replying
-                            if self.text[0] == '@':
+                            if self.text[0] == '!':
                                 msg.reply_to_id = m.uid
-                                msg.text = msg.text[5:]
+                                msg.text = msg.text[6:]
+
+                                # shift mentions back
+                                self.shiftMentions(6, -6)
+
 
                             # it's a command
                             elif self.text[0] == ':':
@@ -1028,10 +1123,7 @@ class MessengerTextBox(Window):
                                 elif command == 'peek':
                                     self.M.peek_hash = code
                                     send_msg = False
-                                
-                                elif command == 'cls':
-                                    self.M.peek_hash = ""
-                                    send_msg = False
+
 
                                 elif command == 'del':
                                     self.client.unsend(m.uid)
@@ -1047,6 +1139,11 @@ class MessengerTextBox(Window):
                                     send_msg = False
 
             if send_msg:
+                # assign mentions
+                msg.mentions = [
+                    Mention(*m) for m in self.mentions
+                ]
+
                 self.client.send(
                     msg,
                     thread_id = self.M.threads[self.M.active_thread].uid,
@@ -1057,7 +1154,7 @@ class MessengerTextBox(Window):
             self.text = ''
             self.cursor_position = 0
 
-        elif a != -1:
+        elif a != -1 and a != 9:        # don't check 9 because it is the tab character and needs special checks for autocompletion
             # send a read notification
             if not self.M.threads[self.M.active_thread].read:
                 try:
@@ -1070,37 +1167,103 @@ class MessengerTextBox(Window):
             char = str(chr(a))[0]
             self.text = self.text[:self.cursor_position] + char + self.text[self.cursor_position:]
 
+            self.shiftMentions(self.cursor_position, 1)
             self.cursor_position += 1
 
             self.addstr(2, 0, str(a) + " " + curses.keyname(a).decode() + "      ")
         
         # process the text itself
         if self.text:
-            if self.text[0] in ':@':
+            if self.text[0] in ':!':
                 # display hash
                 self.M.show_hash = True
                 self.M.force_update = True
+ 
             else:
                 self.M.show_hash = False
                 self.M.force_update = True
-
+            
     def render(self):
-        self.addstr(0, 0, "> ")
+        self.rendered_modal = False
+
+        self.addstr(1, 0, "> ")
 
         self.textDelta()
         self.prev_text = self.text
     
         # draw cursor
         if self.cursor_position != len(self.text):
-            self.addch(0, 2 + self.cursor_position, self.text[self.cursor_position], curses.A_REVERSE)
+            self.addch(1, 2 + self.cursor_position, self.text[self.cursor_position], curses.A_REVERSE)
         else:
-            self.addch(0, 2 + self.cursor_position, ' ', curses.A_REVERSE)
+            self.addch(1, 2 + self.cursor_position, ' ', curses.A_REVERSE)
+
+        # draw the mention autocomplete modal
+        try:
+            at_index = self.text.rindex("@", 0, self.cursor_position)
+        except ValueError:
+            at_index = 0
+        finally:
+            # nicknames is occasionally a list. i assume this is when no one has a nickname so i could technicallyj ust check with if active_thread.nicknames: 
+            # this is a safer check tho
+            active_thread = self.M.getActiveThread()
+
+            if self.text and self.text[at_index] == '@' and active_thread.type == ThreadType.GROUP and type(active_thread.nicknames) == dict:     # start showing autocomplete for usernames
+                at_index_end = self.cursor_position
+                partial_mention = self.text[at_index + 1:at_index_end]
+
+                # this will not work for dms because there is no participants field
+                
+                self.autocomplete_matches = []
+
+                autocomplete_lines = []
+                matches_found = 0
+
+                for user in active_thread.participants:
+                    name = self.M.user_dict[user].name
+
+                    nickname = active_thread.nicknames.get(user, '-')
+
+                    if matchBeginning(name.lower(), [partial_mention.lower()]):
+                        autocomplete_lines += [
+                            ["%s - %s" % (name, user), [[0, len(name), curses.color_pair(3)]]],
+                            [str(nickname), [[0, len(str(nickname)), curses.color_pair(4)]]],
+                            ['']
+                        ]
+
+                        self.autocomplete_matches.append((name, user))
+
+                        matches_found += 1
+
+                if autocomplete_lines:
+                    #highlight the name the user is focusing on
+                    highlight = self.autocomplete_modal_selection % matches_found
+                    autocomplete_lines[highlight * 3][1][0][2] |= curses.A_REVERSE     
+                                    # line  #ins #first_instruction #style
+
+                    max_autocomplete_length = max([len(l[0]) for l in autocomplete_lines])
+
+                    self.autocomplete_modal.resize(len(autocomplete_lines) + 4, max_autocomplete_length + 6)
+                    self.autocomplete_modal.clear()
+
+                    move_y = curses.LINES - 3 - len(autocomplete_lines) - 4 
+                    
+                    move_x = 2 + at_index
+
+                    if move_y >= 1:
+                        self.autocomplete_modal.mvwin(move_y, self.begin_x + move_x)
+                        render_lines(self.autocomplete_modal, autocomplete_lines, padding = [2, 0, 0, 3])
+                        self.autocomplete_modal.box()
+
+                        self.rendered_modal = True
+
 
         # move cursor
 
     def refresh(self):
-        self.window.refresh()
+        self.window.noutrefresh()
 
+        if self.rendered_modal:
+            self.autocomplete_modal.noutrefresh()
 
 
 class LoginTextBox(Window):
