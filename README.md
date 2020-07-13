@@ -2,8 +2,10 @@
 
 Courier is a command line interface for Facebook's Messenger. Courier is meant to be a _typing only_ alternative to messenger that is also easily accessible (from terminal!) and runs with very few resources. The application is based on the curses library and uses the unofficial FBChat API (https://github.com/carpedm20/fbchat/) to query and send messages.
 
+<img src="https://github.com/nathan-yan/courier/raw/master/images/preview.jpg" alt="courier preview"/>
+
 ## How to run
-To start Courier** run `pip install -r requirements.txt` and then `python messenger.py`. You will be asked to login if it is your first time. Cookies will be stored in a file named `cookies.json`. If your cookies file ever becomes corrupted or lost, you will just be asked to login with username and password again.
+To start Courier run `pip install -r requirements.txt` and then `python messenger.py`. You will be asked to login if it is your first time. Cookies will be stored in a file named `cookies.json`. If your cookies file ever becomes corrupted or lost, you will just be asked to login with username and password again.
 
 I highly recommend using the Fira Code font (https://github.com/tonsky/FiraCode) with Courier, because there is some text in Courier that can take advantage of font ligatures.
 
