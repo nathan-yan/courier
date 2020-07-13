@@ -171,6 +171,18 @@ def ellipses(window, text, padding = 0):
 
     return text
 
+def shiftInstructions(instructions, end, shift):
+    """ in place method to shift all instructions when adding extra text to the original text
+
+    for example, say you have color instructions for mentions already defined, but then you add instructions for links, which require a number like [1] to be inserted into the text. this would shift the mention color instructions. this function handles that for you 
+    """
+    
+    for i in instructions: 
+        # if the start of the instruction comes after this instruction, shift it forward
+        if i[0] >= end:
+            i[0] += shift
+            i[1] += shift
+
 # padding is top right left bottom
 def render_lines(window, lines, padding = [0, 0, 0, 0], default_color = None, align = "<"):
     # lines are given as a series of instructions
