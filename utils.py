@@ -269,7 +269,6 @@ def render_lines(window, lines, padding = [0, 0, 0, 0], default_color = None, al
 
         if current_line > mheight - padding[2]:
             break;            
-
 def wrapLine(line, max_length):
 
     # wrap each line according to the max_length
@@ -277,12 +276,31 @@ def wrapLine(line, max_length):
     wrapped_lines = []
 
     if len(line[0]) > max_length:
+        current_x = 0
+        while current_x < len(line[0]):
+            # go max_length characters in, find the nearest space. if there isn't one force wrap at max_length
+            if len(line[0]) - current_x < max_length:
+                # we can stop
+                break;
+                
+            try: 
+                closest_space = line[0].rindex(' ', current_x, current_x + max_length)
+                line[0] = line[0][:closest_space] + '\n' + line[0][closest_space + 1:]
+
+                current_x = closest_space + 1
+            except:
+                # there was no space
+                line[0] = line[0][:current_x + max_length] + '\n' + line[0][current_x + max_length:]
+
+                current_x = current_x + max_length + 2
+
+    """
+    if len(line[0]) > max_length:
         length = len(line[0])
         for i in range (length // max_length):
             
             line[0] = line[0][:(i + 1) * max_length + i] + '\n' + line[0][(i + 1) * max_length + i:]
-    else:
-        wrapped_lines.append(line)
+    """
 
     # once the newlines are added, split by newline
     split = line[0].split("\n")

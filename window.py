@@ -1023,7 +1023,23 @@ class MessengerTextBox(Window):
                         self.M.updateSettings()
                     
                     send_msg = False
+ 
+                elif matchBeginning(self.text, [':r']):     # user is defining some quick replies
+                    # search for | characters to delimit options 
 
+                    options = self.text.split("|")[1:]
+
+                    quick_replies = []
+                    for o in options: 
+                        q = QuickReplyText(o)
+                        q._type = 'text'
+                        quick_replies.append(q)
+            
+                    # let's hope there aren't any mentions in the options LOL
+                    msg.text = msg.text[3:self.text.index("|")]
+                    msg.quick_replies = quick_replies
+                    self.shiftMentions(3, -3)
+                    
                 elif matchBeginning(self.text, [':switch', ':s ', ":S", ":Switch"]):
                     thread_code = self.text.split(" ")[1]
 
@@ -1044,8 +1060,8 @@ class MessengerTextBox(Window):
 
                         except FBchatException as e:
                             print(e, 'matchBeginning :switch')
-                    
                             send_msg = False
+                            
                         except IndexError as e:
                             print(e, "matchBegining :switch, index")
                             send_msg = False

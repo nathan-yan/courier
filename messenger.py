@@ -77,8 +77,10 @@ class Messenger:
             f.write(json.dumps(self.settings, indent = 4))
 
 class MessengerClient(Client):
-    def __init__(self, username, password, max_tries = 2, session_cookies = ""):
-        super().__init__(username, password, max_tries = max_tries, session_cookies = session_cookies)
+    def __init__(self, stdscr, username, password, max_tries = 1, session_cookies = ""):
+        self.stdscr = stdscr
+
+        super().__init__(username, password, max_tries = 1, session_cookies = session_cookies)
 
     def setMessenger(self, messenger_obj):
         self.messenger =  messenger_obj
@@ -191,6 +193,9 @@ class MessengerClient(Client):
                         break;
 
                 break;
+
+    def on2FACode(self):
+        return str(show2fa(self.stdscr).text)
 
 class ListenThread(threading.Thread):
     def __init__(self, client):
@@ -305,6 +310,34 @@ def showLogin(stdscr):
     
     return boxes
 
+def show2fa(stdscr): 
+    mheight, mwidth = stdscr.getmaxyx()
+    stdscr.clear()
+
+    lines = constants.twofa_page
+    starty, startx, lasty = showPage(stdscr, lines)
+
+    stdscr.addstr(starty + 1, startx + 2, "courier", curses.A_REVERSE)
+
+    twofa = LoginTextBox(stdscr, 1, 30, lasty - 3, startx + 2)
+    
+    
+    while True:
+        time.sleep(0.02)
+        a = stdscr.getch()
+
+        if a == 10:     # enter
+            break;
+        elif a == 3:
+            return None
+    
+        twofa.processKey(a)
+        
+        twofa.render()
+        twofa.refresh()
+    
+    return twofa
+
 def main(stdscr):
     curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
@@ -348,7 +381,7 @@ def main(stdscr):
             c = json.loads(cookies.read())
 
             try:
-                client = MessengerClient("", "", session_cookies = c, max_tries = 1)
+                client = MessengerClient(stdscr, "", "", session_cookies = c, max_tries = 1)
                 login_done = True
             except FBchatException:
                 print("authentication by cookies failed") 
@@ -376,7 +409,7 @@ def main(stdscr):
         stdscr.refresh()
 
         try:
-            client = MessengerClient(username, password, max_tries = 1)
+            client = MessengerClient(stdscr, username, password, max_tries = 1)
             login_done = True
         except FBchatException:
             print("authentication by credentials failed")
@@ -424,6 +457,7 @@ def main(stdscr):
     for u in users:
         user_dict[u.uid] = u
 
+
     
     #with open("./data.pkl", 'rb') as f:
     #    threadlist = pickle.load(f)
@@ -453,7 +487,7 @@ def main(stdscr):
 
     thread_window = MessengerThreadWindow(client, M, stdscr, 
                                                         mheight - 1,
-                                                        int(mwidth * thread_width), 1, 0)
+                                                        int(mwidth * thread_width) - 2, 1, 2)
 
     textbox = MessengerTextBox(client, M, stdscr, 3, 
                                                         int(mwidth * (1 - thread_width)) - 15, 
