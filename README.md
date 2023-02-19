@@ -1,5 +1,7 @@
 <img src="https://github.com/nathan-yan/courier/raw/master/images/logo.png" alt="courier logo" width="300"/>
 
+*The unofficial Messenger API library this project uses, FBChat, no longer works/requires tweaking to work properly, so this project likely will break for you (typically at the login stage). If you'd like to try to get Courier to work again with FBChat or some alternative API, I would love to see it!*
+
 *This currently only works for WINDOWS machines! I am working on getting this to display properly on Linux/MacOS*
 
 Courier is a command line interface for Facebook's Messenger. Courier is meant to be a _typing only_ alternative to messenger that is also easily accessible (from terminal!) and runs with very few resources. The application is based on the curses library and uses the unofficial FBChat API (https://github.com/carpedm20/fbchat/) to query and send messages.
